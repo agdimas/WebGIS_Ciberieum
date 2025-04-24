@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="initial-scale=1,user-scalable=no,maximum-scale=1,width=device-width">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <link rel="stylesheet" href="css/leaflet.css">
+        <link rel="stylesheet" href="css/L.Control.Layers.Tree.css">
+        <link rel="stylesheet" href="css/qgis2web.css">
+        <link rel="stylesheet" href="css/fontawesome-all.min.css">
+        <link rel="stylesheet" href="css/leaflet-measure.css">
+        <style>
+        html, body, #map {
+            width: 100%;
+            height: 100%;
+            padding: 0;
+            margin: 0;
+        }
+        #logo-duo {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            display: flex;
+            gap: 10px;
+            background: rgba(255,255,255,0.85);
+            padding: 6px 12px;
+            border-radius: 8px;
+            box-shadow: 0 0 5px rgba(0,0,0,0.2);
+}
+
+#logo-duo img {
+    height: 25px;
+}
+        </style>
+        <title>Tutupan Lahan Ciberieum</title>
+    </head>
+    <body>
+        <div id="map">
+<!-- Logo tengah -->
+        <div id="logo-duo">
+            <img src="img/logo_kiri.png" alt="Logo Kiri">
+            <img src="img/logo_kanan.png" alt="Logo Kanan">
+        </div>
+
+        </div>
+        <script src="js/qgis2web_expressions.js"></script>
+        <script src="js/leaflet.js"></script>
+        <script src="js/L.Control.Layers.Tree.min.js"></script>
+        <script src="js/multi-style-layer.js"></script>
+        <script src="js/leaflet.rotatedMarker.js"></script>
+        <script src="js/leaflet.pattern.js"></script>
+        <script src="js/leaflet-hash.js"></script>
+        <script src="js/Autolinker.min.js"></script>
+        <script src="js/rbush.min.js"></script>
+        <script src="js/labelgun.min.js"></script>
+        <script src="js/labels.js"></script>
+        <script src="js/leaflet-measure.js"></script>
+        <script src="data/Data_Land_Cover_2.js"></script>
+        <script src="data/Highway_3.js"></script>
+        <script>
+        var map = L.map('map', {
+            zoomControl:false, maxZoom:28, minZoom:1
+        }).fitBounds([[-6.313237529817445,107.03520724590373],[-6.308378770381853,107.04480038053336]]);
+        var hash = new L.Hash(map);
+        map.attributionControl.setPrefix('<a href="https://github.com/tomchadwin/qgis2web" target="_blank">qgis2web</a> &middot; <a href="https://leafletjs.com" title="A JS library for interactive maps">Leaflet</a> &middot; <a href="https://qgis.org">QGIS</a>');
+        var autolinker = new Autolinker({truncate: {length: 30, location: 'smart'}});
+        // remove popup's row if "visible-with-data"
+        function removeEmptyRowsFromPopupContent(content, feature) {
+         var tempDiv = document.createElement('div');
+         tempDiv.innerHTML = content;
+         var rows = tempDiv.querySelectorAll('tr');
+         for (var i = 0; i < rows.length; i++) {
+             var td = rows[i].querySelector('td.visible-with-data');
+             var key = td ? td.id : '';
+             if (td && td.classList.contains('visible-with-data') && feature.properties[key] == null) {
+                 rows[i].parentNode.removeChild(rows[i]);
+             }
+         }
+         return tempDiv.innerHTML;
+        }
+        // add class to format popup if it contains media
+		function addClassToPopupIfMedia(content, popup) {
+			var tempDiv = document.createElement('div');
+			tempDiv.innerHTML = content;
+			if (tempDiv.querySelector('td img')) {
+				popup._contentNode.classList.add('media');
+					// Delay to force the redraw
+					setTimeout(function() {
+						popup.update();
+					}, 10);
+			} else {
+				popup._contentNode.classList.remove('media');
+			}
+		}
+        var title = new L.Control({'position':'topleft'});
+        title.onAdd = function (map) {
+            this._div = L.DomUtil.create('div', 'info');
+            this.update();
+            return this._div;
+        };
+        title.update = function () {
+            this._div.innerHTML = '<h2>Tutupan Lahan Ciberieum</h2>';
+        };
+        title.addTo(map);
+        var abstract = new L.Control({'position':'topleft'});
+        abstract.onAdd = function (map) {
+            this._div = L.DomUtil.create('div',
+            'leaflet-control abstract');
+            this._div.id = 'abstract'
+                this._div.setAttribute("onmouseenter", "abstract.show()");
+                this._div.setAttribute("onmouseleave", "abstract.hide()");
+                this.hide();
+                return this._div;
+            };
+            abstract.hide = function () {
+                this._div.classList.remove("abstractUncollapsed");
+                this._div.classList.add("abstract");
+                this._div.innerHTML = 'i'
+            }
+            abstract.show = function () {
+                this._div.classList.remove("abstract");
+                this._div.classList.add("abstractUncollapsed");
+                this._div.innerHTML = 'Metadata Abstract Description : Tutupan lahan daerah Ciberieum yang dioverlay dengan data orthophoto. Data tutupan lahan diperoleh dari klasifikasi otomatis deeplearning dengan input data dari orthomosaic yang diambil dengan menggunakan kamera ILX dan UAV Trinity Pro.';
+        };
+        abstract.addTo(map);
+        var zoomControl = L.control.zoom({
+            position: 'topleft'
+        }).addTo(map);
+        var measureControl = new L.Control.Measure({
+            position: 'topleft',
+            primaryLengthUnit: 'meters',
+            secondaryLengthUnit: 'kilometers',
+            primaryAreaUnit: 'sqmeters',
+            secondaryAreaUnit: 'hectares'
+        });
+        measureControl.addTo(map);
+        document.getElementsByClassName('leaflet-control-measure-toggle')[0].innerHTML = '';
+        document.getElementsByClassName('leaflet-control-measure-toggle')[0].className += ' fas fa-ruler';
+        var bounds_group = new L.featureGroup([]);
+        function setBounds() {
+        }
+        map.createPane('pane_OpenStreetMap_0');
+        map.getPane('pane_OpenStreetMap_0').style.zIndex = 400;
+        var layer_OpenStreetMap_0 = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            pane: 'pane_OpenStreetMap_0',
+            opacity: 1.0,
+            attribution: '',
+            minZoom: 1,
+            maxZoom: 28,
+            minNativeZoom: 0,
+            maxNativeZoom: 19
+        });
+        layer_OpenStreetMap_0;
+        map.addLayer(layer_OpenStreetMap_0);
+        map.createPane('pane_Orthomosaic_Ciberieum_1');
+        map.getPane('pane_Orthomosaic_Ciberieum_1').style.zIndex = 401;
+        var img_Orthomosaic_Ciberieum_1 = 'data/Orthomosaic_Ciberieum_1.png';
+        var img_bounds_Orthomosaic_Ciberieum_1 = [[-6.312602939140245,107.03476805033758],[-6.308038686790245,107.04163702754758]];
+        var layer_Orthomosaic_Ciberieum_1 = new L.imageOverlay(img_Orthomosaic_Ciberieum_1,
+                                              img_bounds_Orthomosaic_Ciberieum_1,
+                                              {pane: 'pane_Orthomosaic_Ciberieum_1'});
+        bounds_group.addLayer(layer_Orthomosaic_Ciberieum_1);
+        map.addLayer(layer_Orthomosaic_Ciberieum_1);
+        function pop_Data_Land_Cover_2(feature, layer) {
+            var popupContent = '<table>\
+                    <tr>\
+                        <th scope="row">Class</th>\
+                        <td>' + (feature.properties['Class'] !== null ? autolinker.link(String(feature.properties['Class']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Area(ha)</th>\
+                        <td>' + (feature.properties['Area'] !== null ? autolinker.link(String(feature.properties['Area']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_Data_Land_Cover_2_0(feature) {
+            switch(String(feature.properties['Class'])) {
+                case 'Bare Soil':
+                    return {
+                pane: 'pane_Data_Land_Cover_2',
+                stroke: false, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(244,109,67,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Buildings':
+                    return {
+                pane: 'pane_Data_Land_Cover_2',
+                stroke: false, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(215,25,28,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Grass/Shrubs':
+                    return {
+                pane: 'pane_Data_Land_Cover_2',
+                stroke: false, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(253,174,97,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Other Paved':
+                    return {
+                pane: 'pane_Data_Land_Cover_2',
+                stroke: false, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(102,194,165,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Roads/Railroads':
+                    return {
+                pane: 'pane_Data_Land_Cover_2',
+                stroke: false, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(153,153,153,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Tall Shrubs':
+                    return {
+                pane: 'pane_Data_Land_Cover_2',
+                stroke: false, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(171,221,164,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Tree Canopy':
+                    return {
+                pane: 'pane_Data_Land_Cover_2',
+                stroke: false, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(26,150,65,1.0)',
+                interactive: true,
+            }
+                    break;
+            }
+        }
+        map.createPane('pane_Data_Land_Cover_2');
+        map.getPane('pane_Data_Land_Cover_2').style.zIndex = 402;
+        map.getPane('pane_Data_Land_Cover_2').style['mix-blend-mode'] = 'multiply';
+        var layer_Data_Land_Cover_2 = new L.geoJson(json_Data_Land_Cover_2, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_Data_Land_Cover_2',
+            layerName: 'layer_Data_Land_Cover_2',
+            pane: 'pane_Data_Land_Cover_2',
+            onEachFeature: pop_Data_Land_Cover_2,
+            style: style_Data_Land_Cover_2_0,
+        });
+        bounds_group.addLayer(layer_Data_Land_Cover_2);
+        map.addLayer(layer_Data_Land_Cover_2);
+        function pop_Highway_3(feature, layer) {
+            var popupContent = '<table>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['highway'] !== null ? autolinker.link(String(feature.properties['highway']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_Highway_3_0() {
+            return {
+                pane: 'pane_Highway_3',
+                opacity: 1,
+                color: 'rgba(255,255,255,0.701)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'miter',
+                weight: 4.0,
+                fillOpacity: 0,
+                interactive: false,
+            }
+        }
+        function style_Highway_3_1() {
+            return {
+                pane: 'pane_Highway_3',
+                opacity: 1,
+                color: 'rgba(0,0,0,0.701)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 3.0,
+                fillOpacity: 0,
+                interactive: false,
+            }
+        }
+        map.createPane('pane_Highway_3');
+        map.getPane('pane_Highway_3').style.zIndex = 403;
+        map.getPane('pane_Highway_3').style['mix-blend-mode'] = 'normal';
+        var layer_Highway_3 = new L.geoJson.multiStyle(json_Highway_3, {
+            attribution: '',
+            interactive: false,
+            dataVar: 'json_Highway_3',
+            layerName: 'layer_Highway_3',
+            pane: 'pane_Highway_3',
+            onEachFeature: pop_Highway_3,
+            styles: [style_Highway_3_0,style_Highway_3_1,]
+        });
+        bounds_group.addLayer(layer_Highway_3);
+        map.addLayer(layer_Highway_3);
+        var overlaysTree = [
+            {label: '<img src="legend/Highway_3.png" /> Highway', layer: layer_Highway_3},
+            {label: 'Data_Land_Cover<br /><table><tr><td style="text-align: center;"><img src="legend/Data_Land_Cover_2_BareSoil0.png" /></td><td>Bare Soil</td></tr><tr><td style="text-align: center;"><img src="legend/Data_Land_Cover_2_Buildings1.png" /></td><td>Buildings</td></tr><tr><td style="text-align: center;"><img src="legend/Data_Land_Cover_2_GrassShrubs2.png" /></td><td>Grass/Shrubs</td></tr><tr><td style="text-align: center;"><img src="legend/Data_Land_Cover_2_OtherPaved3.png" /></td><td>Other Paved</td></tr><tr><td style="text-align: center;"><img src="legend/Data_Land_Cover_2_RoadsRailroads4.png" /></td><td>Roads/Railroads</td></tr><tr><td style="text-align: center;"><img src="legend/Data_Land_Cover_2_TallShrubs5.png" /></td><td>Tall Shrubs</td></tr><tr><td style="text-align: center;"><img src="legend/Data_Land_Cover_2_TreeCanopy6.png" /></td><td>Tree Canopy</td></tr></table>', layer: layer_Data_Land_Cover_2},
+            {label: "Orthomosaic_Ciberieum", layer: layer_Orthomosaic_Ciberieum_1},
+            {label: "OpenStreetMap", layer: layer_OpenStreetMap_0, radioGroup: 'bm' },]
+        var lay = L.control.layers.tree(null, overlaysTree,{
+            //namedToggle: true,
+            //selectorBack: false,
+            //closedSymbol: '&#8862; &#x1f5c0;',
+            //openedSymbol: '&#8863; &#x1f5c1;',
+            //collapseAll: 'Collapse all',
+            //expandAll: 'Expand all',
+            collapsed: true,
+        });
+        lay.addTo(map);
+        setBounds();
+        L.ImageOverlay.include({
+            getBounds: function () {
+                return this._bounds;
+            }
+        });
+        </script>
+    </body>
+</html>
